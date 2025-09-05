@@ -3,13 +3,50 @@ const vscode = require("vscode");
 const buttonDisposables = new Map();
 let terminal;
 
+// --- A list of predefined colors for the user to choose from ---
+const colorOptions = [
+  {
+    label: "Default",
+    description: "Standard editor text color",
+    color: undefined,
+  },
+  {
+    label: "Green",
+    description: "Good for success/start/build tasks",
+    color: "#33FF57",
+  },
+  {
+    label: "Red",
+    description: "Good for danger/stop/delete tasks",
+    color: "#FF5733",
+  },
+  {
+    label: "Yellow",
+    description: "Good for warning/linting tasks",
+    color: "#FFC300",
+  },
+  {
+    label: "Blue",
+    description: "Good for info/install tasks",
+    color: "#30B4FF",
+  },
+  // This special ID tells VS Code to use its built-in error color
+  {
+    label: "Error Color",
+    description: "Uses the standard theme error color",
+    color: "statusBarItem.errorForeground",
+  },
+];
+
 function activate(context) {
   // --- REGISTER COMMANDS ---
 
   const addButtonCommand = vscode.commands.registerCommand(
     "click2run.addButton",
     async () => {
-      // This function remains the same as before, no changes here.
+      // This command's flow is now: Icon -> Color -> Text -> Command -> Tooltip
+
+      // Icon Picker (no change)
       const icons = [
         { label: "None", description: "Just plain text" },
         { label: "$(play) play", description: "A play icon" },
@@ -40,8 +77,16 @@ function activate(context) {
         selectedIcon.label === "None"
           ? ""
           : selectedIcon.label.split(" ")[0] + " ";
+
+      // *** NEW: Color Picker ***
+      const selectedColor = await vscode.window.showQuickPick(colorOptions, {
+        placeHolder: "Select a color for the button (optional)",
+      });
+      if (!selectedColor) return; // Exit if user cancels
+
+      // Continue with the rest of the prompts (no change)
       const text = await vscode.window.showInputBox({
-        prompt: "Button Text (the icon will be added automatically)",
+        prompt: "Button Text (icon and color will be added automatically)",
         placeHolder: "Start Server",
       });
       if (!text) return;
@@ -55,13 +100,17 @@ function activate(context) {
         prompt: "Tooltip Text (Optional)",
         placeHolder: `Runs the command: ${command}`,
       });
+
       const config = vscode.workspace.getConfiguration("click2run");
       const buttons = config.get("buttons", []);
+
+      // *** CHANGE: Add the selected color to the new button object ***
       const newButton = {
         id: Date.now().toString(),
         text: buttonText,
         command,
         tooltip,
+        color: selectedColor.color, // Add the color property
       };
       buttons.push(newButton);
       await config.update(
@@ -92,7 +141,6 @@ function activate(context) {
 
       if (!selectedButton) return;
 
-      // *** CHANGE: Add "Edit" as an option ***
       const action = await vscode.window.showQuickPick(
         ["Edit", "Delete", "Cancel"],
         {
@@ -110,41 +158,43 @@ function activate(context) {
         vscode.window.showInformationMessage(
           `Button '${selectedButton.label}' was deleted.`
         );
-      }
-      // *** NEW: The entire "Edit" logic block ***
-      else if (action === "Edit") {
+      } else if (action === "Edit") {
         const buttonToEdit = buttons.find((b) => b.id === selectedButton.id);
-        if (!buttonToEdit) return; // Should never happen, but good practice
+        if (!buttonToEdit) return;
 
-        // Re-run the creation prompts, but pre-fill them with existing values.
+        // *** NEW: Add color prompt to the Edit flow ***
+        const newColor = await vscode.window.showQuickPick(colorOptions, {
+          placeHolder: "Select a new color for the button",
+        });
+        if (!newColor) return; // Exit if user cancels
+
         const newText = await vscode.window.showInputBox({
           prompt: "Button Text",
-          value: buttonToEdit.text, // Pre-fill with current text
+          value: buttonToEdit.text,
         });
         if (!newText) return;
 
         const newCommand = await vscode.window.showInputBox({
           prompt: "Terminal Command to Run",
-          value: buttonToEdit.command, // Pre-fill with current command
+          value: buttonToEdit.command,
         });
         if (!newCommand) return;
 
         const newTooltip = await vscode.window.showInputBox({
           prompt: "Tooltip Text (Optional)",
-          value: buttonToEdit.tooltip || "", // Pre-fill with current tooltip
+          value: buttonToEdit.tooltip || "",
         });
 
-        // Find the index of the button we are editing.
         const buttonIndex = buttons.findIndex(
           (b) => b.id === selectedButton.id
         );
 
-        // Update the button's properties in the array.
+        // *** CHANGE: Update the color property along with the others ***
         buttons[buttonIndex].text = newText;
         buttons[buttonIndex].command = newCommand;
         buttons[buttonIndex].tooltip = newTooltip;
+        buttons[buttonIndex].color = newColor.color; // Update the color
 
-        // Save the modified array back to the settings.
         await config.update(
           "buttons",
           buttons,
@@ -186,7 +236,7 @@ function activate(context) {
 }
 
 function updateButtons() {
-  // This function remains the same as before
+  // This function automatically applies the color, so no changes are needed here.
   for (const disposable of buttonDisposables.values()) {
     disposable.command.dispose();
     disposable.statusBarItem.dispose();
@@ -210,7 +260,7 @@ function updateButtons() {
     );
     statusBarItem.text = buttonConfig.text;
     statusBarItem.tooltip = buttonConfig.tooltip;
-    statusBarItem.color = buttonConfig.color;
+    statusBarItem.color = buttonConfig.color; // This line does all the work!
     statusBarItem.command = commandId;
     statusBarItem.show();
     buttonDisposables.set(buttonConfig.id, {
@@ -221,7 +271,6 @@ function updateButtons() {
 }
 
 function createAddButton(context) {
-  // This function remains the same
   const addButton = vscode.window.createStatusBarItem(
     vscode.StatusBarAlignment.Left,
     100
@@ -234,7 +283,6 @@ function createAddButton(context) {
 }
 
 function deactivate() {
-  // This function remains the same
   for (const disposable of buttonDisposables.values()) {
     disposable.command.dispose();
     disposable.statusBarItem.dispose();
