@@ -1,36 +1,42 @@
 const vscode = require("vscode");
 
 const buttonDisposables = new Map();
-let terminal;
+let sharedTerminal;
 const colorOptions = [
   {
     label: "Default",
-    description: "Standard editor text color",
+    description: "Uses the standard text color of your theme",
     color: undefined,
   },
   {
-    label: "Green",
-    description: "Good for success/start/build tasks",
+    label: "Green (Vibrant)",
+    description: "A bright, eye-catching green",
     color: "#33FF57",
   },
   {
-    label: "Red",
-    description: "Good for danger/stop/delete tasks",
+    label: "Red (Vibrant)",
+    description: "A strong, attention-grabbing red",
     color: "#FF5733",
   },
   {
-    label: "Yellow",
-    description: "Good for warning/linting tasks",
+    label: "Yellow (Vibrant)",
+    description: "A bright, noticeable yellow",
     color: "#FFC300",
   },
   {
-    label: "Blue",
-    description: "Good for info/install tasks",
+    label: "Blue (Vibrant)",
+    description: "A clear, modern blue",
     color: "#30B4FF",
   },
   {
-    label: "Error Color",
-    description: "Uses the standard theme error color",
+    label: "Warning Yellow (Theme)",
+    description:
+      "Uses your theme's standard warning color (usually yellow/orange)",
+    color: "statusBarItem.warningForeground",
+  },
+  {
+    label: "Error Red (Theme)",
+    description: "Uses your theme's standard error color (usually red)",
     color: "statusBarItem.errorForeground",
   },
 ];
@@ -85,7 +91,7 @@ function activate(context) {
       if (!selectedColor) return;
 
       const text = await vscode.window.showInputBox({
-        prompt: "Button Text (icon and color will be added automatically)",
+        prompt: "Button Text",
         placeHolder: "Start Server",
       });
       if (!text) return;
@@ -97,11 +103,19 @@ function activate(context) {
       });
       if (!command) return;
 
+      const terminalOption = await vscode.window.showQuickPick(
+        ["No (use shared terminal)", "Yes (create a new terminal)"],
+        {
+          placeHolder: "Run this command in a new terminal?",
+        }
+      );
+      if (!terminalOption) return;
+      const useNewTerminal = terminalOption.startsWith("Yes");
+
       const tooltip = await vscode.window.showInputBox({
-        prompt: "Tooltip Text (Optional - Leave blank for auto-generation)",
+        prompt: "Tooltip Text (Optional)",
         placeHolder: `Runs the command: ${command}`,
       });
-
       const finalTooltip = tooltip || `Runs the command: '${command}'`;
 
       const config = vscode.workspace.getConfiguration("click2run");
@@ -113,6 +127,7 @@ function activate(context) {
         command,
         tooltip: finalTooltip,
         color: selectedColor.color,
+        useNewTerminal: useNewTerminal,
       };
       buttons.push(newButton);
       await config.update(
@@ -129,19 +144,15 @@ function activate(context) {
     async () => {
       const config = vscode.workspace.getConfiguration("click2run");
       let buttons = config.get("buttons", []);
-
       if (buttons.length === 0) {
         vscode.window.showInformationMessage("You have no buttons to manage.");
         return;
       }
-
       const buttonItems = buttons.map((b) => ({ label: b.text, id: b.id }));
-
       const selectedButton = await vscode.window.showQuickPick(buttonItems, {
         placeHolder: "Select a button to manage",
       });
       if (!selectedButton) return;
-
       const action = await vscode.window.showQuickPick(
         ["Edit", "Delete", "Cancel"],
         {
@@ -167,26 +178,31 @@ function activate(context) {
           placeHolder: "Select a new color for the button",
         });
         if (!newColor) return;
-
         const newText = await vscode.window.showInputBox({
           prompt: "Button Text",
           value: buttonToEdit.text,
         });
         if (!newText) return;
-
         const newCommand = await vscode.window.showInputBox({
           prompt: "Terminal Command to Run",
           value: buttonToEdit.command,
         });
         if (!newCommand) return;
 
+        const terminalOption = await vscode.window.showQuickPick(
+          ["No (use shared terminal)", "Yes (create a new terminal)"],
+          {
+            placeHolder: "Run this command in a new terminal?",
+          }
+        );
+        if (!terminalOption) return;
+        const useNewTerminal = terminalOption.startsWith("Yes");
+
         const newTooltip = await vscode.window.showInputBox({
-          prompt: "Tooltip Text (Optional - Leave blank for auto-generation)",
+          prompt: "Tooltip Text (Optional)",
           value: buttonToEdit.tooltip || "",
         });
-
         const finalTooltip = newTooltip || `Runs the command: '${newCommand}'`;
-
         const buttonIndex = buttons.findIndex(
           (b) => b.id === selectedButton.id
         );
@@ -195,6 +211,7 @@ function activate(context) {
         buttons[buttonIndex].command = newCommand;
         buttons[buttonIndex].tooltip = finalTooltip;
         buttons[buttonIndex].color = newColor.color;
+        buttons[buttonIndex].useNewTerminal = useNewTerminal;
 
         await config.update(
           "buttons",
@@ -223,7 +240,6 @@ function activate(context) {
     manageButtonsCommand,
     editButtonsFileCommand
   );
-
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (event.affectsConfiguration("click2run.buttons")) {
@@ -231,7 +247,6 @@ function activate(context) {
       }
     })
   );
-
   createAddButton(context);
   updateButtons();
 }
@@ -245,15 +260,25 @@ function updateButtons() {
   const buttonConfigs = vscode.workspace
     .getConfiguration("click2run")
     .get("buttons", []);
+
   buttonConfigs.forEach((buttonConfig) => {
     const commandId = `click2run.runCommand.${buttonConfig.id}`;
     const commandDisposable = vscode.commands.registerCommand(commandId, () => {
-      if (!terminal || terminal.exitStatus) {
-        terminal = vscode.window.createTerminal(`Click2Run`);
+      let targetTerminal;
+      if (buttonConfig.useNewTerminal) {
+        targetTerminal = vscode.window.createTerminal(
+          `Click2Run: ${buttonConfig.text}`
+        );
+      } else {
+        if (!sharedTerminal || sharedTerminal.exitStatus) {
+          sharedTerminal = vscode.window.createTerminal(`Click2Run (Shared)`);
+        }
+        targetTerminal = sharedTerminal;
       }
-      terminal.show();
-      terminal.sendText(buttonConfig.command);
+      targetTerminal.show();
+      targetTerminal.sendText(buttonConfig.command);
     });
+
     const statusBarItem = vscode.window.createStatusBarItem(
       vscode.StatusBarAlignment.Left,
       buttonConfig.priority || 0
@@ -283,12 +308,8 @@ function createAddButton(context) {
 }
 
 function deactivate() {
-  for (const disposable of buttonDisposables.values()) {
-    disposable.command.dispose();
-    disposable.statusBarItem.dispose();
-  }
-  if (terminal) {
-    terminal.dispose();
+  if (sharedTerminal) {
+    sharedTerminal.dispose();
   }
 }
 

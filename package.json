@@ -2,7 +2,7 @@
   "name": "click2run",
   "displayName": "Click2Run",
   "description": "Create custom buttons in the status bar to run any terminal commands.",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "publisher": "YourPublisherName",
   "engines": {
     "vscode": "^1.80.0"
@@ -19,7 +19,7 @@
       },
       {
         "command": "click2run.manageButtons",
-        "title": "Click2Run: Manage Buttons (Delete, etc.)"
+        "title": "Click2Run: Manage Buttons (Delete, Edit)"
       },
       {
         "command": "click2run.editButtonsFile",
@@ -61,6 +61,11 @@
               "command": {
                 "type": "string",
                 "description": "The terminal command to run. Use '&&' to chain multiple commands."
+              },
+              "useNewTerminal": {
+                "type": "boolean",
+                "default": false,
+                "description": "If true, this command will always run in a new, dedicated terminal."
               },
               "priority": {
                 "type": "number",
