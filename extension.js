@@ -1,4 +1,6 @@
 const vscode = require("vscode");
+const fs = require("fs"); // Node.js File System module
+const path = require("path"); // Node.js Path module
 
 const buttonDisposables = new Map();
 let sharedTerminal;
@@ -30,13 +32,12 @@ const colorOptions = [
   },
   {
     label: "Warning Yellow (Theme)",
-    description:
-      "Uses your theme's standard warning color (usually yellow/orange)",
+    description: "Uses your theme's standard warning color",
     color: "statusBarItem.warningForeground",
   },
   {
     label: "Error Red (Theme)",
-    description: "Uses your theme's standard error color (usually red)",
+    description: "Uses your theme's standard error color",
     color: "statusBarItem.errorForeground",
   },
 ];
@@ -84,25 +85,21 @@ function activate(context) {
         selectedIcon.label === "None"
           ? ""
           : selectedIcon.label.split(" ")[0] + " ";
-
       const selectedColor = await vscode.window.showQuickPick(colorOptions, {
         placeHolder: "Select a color for the button (optional)",
       });
       if (!selectedColor) return;
-
       const text = await vscode.window.showInputBox({
         prompt: "Button Text",
         placeHolder: "Start Server",
       });
       if (!text) return;
       const buttonText = iconText + text;
-
       const command = await vscode.window.showInputBox({
         prompt: "Terminal Command to Run",
         placeHolder: "npm run dev",
       });
       if (!command) return;
-
       const terminalOption = await vscode.window.showQuickPick(
         ["No (use shared terminal)", "Yes (create a new terminal)"],
         {
@@ -111,16 +108,13 @@ function activate(context) {
       );
       if (!terminalOption) return;
       const useNewTerminal = terminalOption.startsWith("Yes");
-
       const tooltip = await vscode.window.showInputBox({
         prompt: "Tooltip Text (Optional)",
         placeHolder: `Runs the command: ${command}`,
       });
       const finalTooltip = tooltip || `Runs the command: '${command}'`;
-
       const config = vscode.workspace.getConfiguration("click2run");
       const buttons = config.get("buttons", []);
-
       const newButton = {
         id: Date.now().toString(),
         text: buttonText,
@@ -159,7 +153,6 @@ function activate(context) {
           placeHolder: `What would you like to do with '${selectedButton.label}'?`,
         }
       );
-
       if (action === "Delete") {
         const newButtons = buttons.filter((b) => b.id !== selectedButton.id);
         await config.update(
@@ -173,7 +166,6 @@ function activate(context) {
       } else if (action === "Edit") {
         const buttonToEdit = buttons.find((b) => b.id === selectedButton.id);
         if (!buttonToEdit) return;
-
         const newColor = await vscode.window.showQuickPick(colorOptions, {
           placeHolder: "Select a new color for the button",
         });
@@ -188,7 +180,6 @@ function activate(context) {
           value: buttonToEdit.command,
         });
         if (!newCommand) return;
-
         const terminalOption = await vscode.window.showQuickPick(
           ["No (use shared terminal)", "Yes (create a new terminal)"],
           {
@@ -197,7 +188,6 @@ function activate(context) {
         );
         if (!terminalOption) return;
         const useNewTerminal = terminalOption.startsWith("Yes");
-
         const newTooltip = await vscode.window.showInputBox({
           prompt: "Tooltip Text (Optional)",
           value: buttonToEdit.tooltip || "",
@@ -206,13 +196,11 @@ function activate(context) {
         const buttonIndex = buttons.findIndex(
           (b) => b.id === selectedButton.id
         );
-
         buttons[buttonIndex].text = newText;
         buttons[buttonIndex].command = newCommand;
         buttons[buttonIndex].tooltip = finalTooltip;
         buttons[buttonIndex].color = newColor.color;
         buttons[buttonIndex].useNewTerminal = useNewTerminal;
-
         await config.update(
           "buttons",
           buttons,
@@ -235,11 +223,115 @@ function activate(context) {
     }
   );
 
+  const exportButtonsCommand = vscode.commands.registerCommand(
+    "click2run.exportButtons",
+    async () => {
+      const buttons = vscode.workspace
+        .getConfiguration("click2run")
+        .get("buttons", []);
+      if (buttons.length === 0) {
+        vscode.window.showErrorMessage("There are no buttons to export.");
+        return;
+      }
+      const defaultUri = vscode.workspace.workspaceFolders
+        ? vscode.Uri.joinPath(
+            vscode.workspace.workspaceFolders[0].uri,
+            "click2run-buttons.json"
+          )
+        : undefined;
+
+      const uri = await vscode.window.showSaveDialog({
+        defaultUri: defaultUri,
+        saveLabel: "Export Buttons",
+        filters: { JSON: ["json"] },
+      });
+
+      if (uri) {
+        const buttonsJson = JSON.stringify(buttons, null, 4);
+        fs.writeFile(uri.fsPath, buttonsJson, (err) => {
+          if (err) {
+            vscode.window.showErrorMessage(
+              `Failed to export buttons: ${err.message}`
+            );
+          } else {
+            vscode.window.showInformationMessage(
+              `Buttons successfully exported to ${path.basename(uri.fsPath)}`
+            );
+          }
+        });
+      }
+    }
+  );
+
+  const importButtonsCommand = vscode.commands.registerCommand(
+    "click2run.importButtons",
+    async () => {
+      const uris = await vscode.window.showOpenDialog({
+        canSelectMany: false,
+        openLabel: "Import Buttons",
+        filters: { JSON: ["json"] },
+      });
+
+      if (uris && uris[0]) {
+        fs.readFile(uris[0].fsPath, "utf8", async (err, data) => {
+          if (err) {
+            vscode.window.showErrorMessage(
+              `Failed to read import file: ${err.message}`
+            );
+            return;
+          }
+          try {
+            const importedButtons = JSON.parse(data);
+            if (!Array.isArray(importedButtons)) {
+              throw new Error("File does not contain a valid button array.");
+            }
+
+            const importType = await vscode.window.showQuickPick(
+              ["Merge with existing buttons", "Overwrite existing buttons"],
+              {
+                placeHolder: "How would you like to import these buttons?",
+              }
+            );
+
+            if (!importType) return;
+
+            const config = vscode.workspace.getConfiguration("click2run");
+            let newButtons = [];
+
+            if (importType.startsWith("Merge")) {
+              const currentButtons = config.get("buttons", []);
+              newButtons = [...currentButtons, ...importedButtons];
+            } else {
+              // Overwrite
+              newButtons = importedButtons;
+            }
+
+            await config.update(
+              "buttons",
+              newButtons,
+              vscode.ConfigurationTarget.Workspace
+            );
+            vscode.window.showInformationMessage(
+              "Buttons imported successfully!"
+            );
+          } catch (e) {
+            vscode.window.showErrorMessage(
+              `Failed to import buttons: ${e.message}`
+            );
+          }
+        });
+      }
+    }
+  );
+
   context.subscriptions.push(
     addButtonCommand,
     manageButtonsCommand,
-    editButtonsFileCommand
+    editButtonsFileCommand,
+    exportButtonsCommand,
+    importButtonsCommand
   );
+
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (event.affectsConfiguration("click2run.buttons")) {
@@ -247,6 +339,7 @@ function activate(context) {
       }
     })
   );
+
   createAddButton(context);
   updateButtons();
 }
@@ -260,7 +353,6 @@ function updateButtons() {
   const buttonConfigs = vscode.workspace
     .getConfiguration("click2run")
     .get("buttons", []);
-
   buttonConfigs.forEach((buttonConfig) => {
     const commandId = `click2run.runCommand.${buttonConfig.id}`;
     const commandDisposable = vscode.commands.registerCommand(commandId, () => {
@@ -278,7 +370,6 @@ function updateButtons() {
       targetTerminal.show();
       targetTerminal.sendText(buttonConfig.command);
     });
-
     const statusBarItem = vscode.window.createStatusBarItem(
       vscode.StatusBarAlignment.Left,
       buttonConfig.priority || 0

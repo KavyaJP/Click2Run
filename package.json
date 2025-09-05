@@ -2,7 +2,7 @@
   "name": "click2run",
   "displayName": "Click2Run",
   "description": "Create custom buttons in the status bar to run any terminal commands.",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "publisher": "YourPublisherName",
   "engines": {
     "vscode": "^1.80.0"
@@ -24,6 +24,14 @@
       {
         "command": "click2run.editButtonsFile",
         "title": "Click2Run: Edit Buttons File (settings.json)"
+      },
+      {
+        "command": "click2run.exportButtons",
+        "title": "Click2Run: Export Buttons to a File"
+      },
+      {
+        "command": "click2run.importButtons",
+        "title": "Click2Run: Import Buttons from a File"
       }
     ],
     "configuration": {
