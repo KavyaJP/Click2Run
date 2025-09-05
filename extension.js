@@ -9,6 +9,7 @@ function activate(context) {
   const addButtonCommand = vscode.commands.registerCommand(
     "click2run.addButton",
     async () => {
+      // This function remains the same as before, no changes here.
       const icons = [
         { label: "None", description: "Just plain text" },
         { label: "$(play) play", description: "A play icon" },
@@ -31,89 +32,75 @@ function activate(context) {
           description: "A git/source control icon",
         },
       ];
-
       const selectedIcon = await vscode.window.showQuickPick(icons, {
         placeHolder: "Select an icon for your button (optional)",
       });
-
       if (!selectedIcon) return;
-
       const iconText =
         selectedIcon.label === "None"
           ? ""
           : selectedIcon.label.split(" ")[0] + " ";
-
       const text = await vscode.window.showInputBox({
         prompt: "Button Text (the icon will be added automatically)",
         placeHolder: "Start Server",
       });
       if (!text) return;
-
       const buttonText = iconText + text;
-
       const command = await vscode.window.showInputBox({
         prompt: "Terminal Command to Run",
         placeHolder: "npm run dev",
       });
       if (!command) return;
-
       const tooltip = await vscode.window.showInputBox({
         prompt: "Tooltip Text (Optional)",
         placeHolder: `Runs the command: ${command}`,
       });
-
       const config = vscode.workspace.getConfiguration("click2run");
       const buttons = config.get("buttons", []);
-
-      // *** CHANGE: Add a unique ID using the current timestamp ***
       const newButton = {
-        id: Date.now().toString(), // Unique ID!
+        id: Date.now().toString(),
         text: buttonText,
         command,
         tooltip,
       };
-
       buttons.push(newButton);
-
       await config.update(
         "buttons",
         buttons,
         vscode.ConfigurationTarget.Workspace
       );
-
       vscode.window.showInformationMessage(`Button '${buttonText}' was added!`);
     }
   );
 
-  // *** NEW: Command to Manage (and Delete) Buttons ***
   const manageButtonsCommand = vscode.commands.registerCommand(
     "click2run.manageButtons",
     async () => {
       const config = vscode.workspace.getConfiguration("click2run");
-      const buttons = config.get("buttons", []);
+      let buttons = config.get("buttons", []);
 
       if (buttons.length === 0) {
         vscode.window.showInformationMessage("You have no buttons to manage.");
         return;
       }
 
-      // Create a list of button labels for the Quick Pick
       const buttonItems = buttons.map((b) => ({ label: b.text, id: b.id }));
 
-      // Show the list and let the user select a button
       const selectedButton = await vscode.window.showQuickPick(buttonItems, {
         placeHolder: "Select a button to manage",
       });
 
       if (!selectedButton) return;
 
-      // Ask the user what action to take
-      const action = await vscode.window.showQuickPick(["Delete", "Cancel"], {
-        placeHolder: `What would you like to do with '${selectedButton.label}'?`,
-      });
+      // *** CHANGE: Add "Edit" as an option ***
+      const action = await vscode.window.showQuickPick(
+        ["Edit", "Delete", "Cancel"],
+        {
+          placeHolder: `What would you like to do with '${selectedButton.label}'?`,
+        }
+      );
 
       if (action === "Delete") {
-        // Filter the array, keeping all buttons EXCEPT the one with the selected ID
         const newButtons = buttons.filter((b) => b.id !== selectedButton.id);
         await config.update(
           "buttons",
@@ -122,6 +109,49 @@ function activate(context) {
         );
         vscode.window.showInformationMessage(
           `Button '${selectedButton.label}' was deleted.`
+        );
+      }
+      // *** NEW: The entire "Edit" logic block ***
+      else if (action === "Edit") {
+        const buttonToEdit = buttons.find((b) => b.id === selectedButton.id);
+        if (!buttonToEdit) return; // Should never happen, but good practice
+
+        // Re-run the creation prompts, but pre-fill them with existing values.
+        const newText = await vscode.window.showInputBox({
+          prompt: "Button Text",
+          value: buttonToEdit.text, // Pre-fill with current text
+        });
+        if (!newText) return;
+
+        const newCommand = await vscode.window.showInputBox({
+          prompt: "Terminal Command to Run",
+          value: buttonToEdit.command, // Pre-fill with current command
+        });
+        if (!newCommand) return;
+
+        const newTooltip = await vscode.window.showInputBox({
+          prompt: "Tooltip Text (Optional)",
+          value: buttonToEdit.tooltip || "", // Pre-fill with current tooltip
+        });
+
+        // Find the index of the button we are editing.
+        const buttonIndex = buttons.findIndex(
+          (b) => b.id === selectedButton.id
+        );
+
+        // Update the button's properties in the array.
+        buttons[buttonIndex].text = newText;
+        buttons[buttonIndex].command = newCommand;
+        buttons[buttonIndex].tooltip = newTooltip;
+
+        // Save the modified array back to the settings.
+        await config.update(
+          "buttons",
+          buttons,
+          vscode.ConfigurationTarget.Workspace
+        );
+        vscode.window.showInformationMessage(
+          `Button '${newText}' was updated.`
         );
       }
     }
@@ -156,20 +186,17 @@ function activate(context) {
 }
 
 function updateButtons() {
+  // This function remains the same as before
   for (const disposable of buttonDisposables.values()) {
     disposable.command.dispose();
     disposable.statusBarItem.dispose();
   }
   buttonDisposables.clear();
-
   const buttonConfigs = vscode.workspace
     .getConfiguration("click2run")
     .get("buttons", []);
-
   buttonConfigs.forEach((buttonConfig) => {
-    // *** CHANGE: Use the unique ID for the command ***
     const commandId = `click2run.runCommand.${buttonConfig.id}`;
-
     const commandDisposable = vscode.commands.registerCommand(commandId, () => {
       if (!terminal || terminal.exitStatus) {
         terminal = vscode.window.createTerminal(`Click2Run`);
@@ -177,7 +204,6 @@ function updateButtons() {
       terminal.show();
       terminal.sendText(buttonConfig.command);
     });
-
     const statusBarItem = vscode.window.createStatusBarItem(
       vscode.StatusBarAlignment.Left,
       buttonConfig.priority || 0
@@ -187,8 +213,6 @@ function updateButtons() {
     statusBarItem.color = buttonConfig.color;
     statusBarItem.command = commandId;
     statusBarItem.show();
-
-    // *** CHANGE: Use the unique ID as the key in our map ***
     buttonDisposables.set(buttonConfig.id, {
       command: commandDisposable,
       statusBarItem: statusBarItem,
@@ -197,6 +221,7 @@ function updateButtons() {
 }
 
 function createAddButton(context) {
+  // This function remains the same
   const addButton = vscode.window.createStatusBarItem(
     vscode.StatusBarAlignment.Left,
     100
@@ -209,6 +234,7 @@ function createAddButton(context) {
 }
 
 function deactivate() {
+  // This function remains the same
   for (const disposable of buttonDisposables.values()) {
     disposable.command.dispose();
     disposable.statusBarItem.dispose();
