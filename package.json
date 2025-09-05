@@ -2,7 +2,7 @@
   "name": "click2run",
   "displayName": "Click2Run",
   "description": "Create custom buttons in the status bar to run any terminal commands.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "publisher": "YourPublisherName",
   "engines": {
     "vscode": "^1.80.0"
@@ -19,7 +19,11 @@
       },
       {
         "command": "click2run.manageButtons",
-        "title": "Click2Run: Edit Workspace Buttons (settings.json)"
+        "title": "Click2Run: Manage Buttons (Delete, etc.)"
+      },
+      {
+        "command": "click2run.editButtonsFile",
+        "title": "Click2Run: Edit Buttons File (settings.json)"
       }
     ],
     "configuration": {
@@ -34,9 +38,14 @@
             "type": "object",
             "required": [
               "text",
-              "command"
+              "command",
+              "id"
             ],
             "properties": {
+              "id": {
+                "type": "string",
+                "description": "A unique ID for the button."
+              },
               "text": {
                 "type": "string",
                 "description": "Text to display on the button. You can use icons like $(play)."

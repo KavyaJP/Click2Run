@@ -1,22 +1,14 @@
 const vscode = require("vscode");
 
-// A Map to store our button disposables so we can clean up properly.
 const buttonDisposables = new Map();
 let terminal;
 
-/**
- * This is the main function that runs when your extension is activated.
- * @param {vscode.ExtensionContext} context
- */
 function activate(context) {
-  // --- REGISTER THE COMMANDS ---
+  // --- REGISTER COMMANDS ---
 
   const addButtonCommand = vscode.commands.registerCommand(
     "click2run.addButton",
     async () => {
-      // --- NEW: ICON PICKER LOGIC ---
-
-      // 1. Create a list of common icons for the user to choose from.
       const icons = [
         { label: "None", description: "Just plain text" },
         { label: "$(play) play", description: "A play icon" },
@@ -40,29 +32,23 @@ function activate(context) {
         },
       ];
 
-      // 2. Show the Quick Pick dropdown to the user.
       const selectedIcon = await vscode.window.showQuickPick(icons, {
         placeHolder: "Select an icon for your button (optional)",
       });
 
-      // Exit if the user presses escape
       if (!selectedIcon) return;
 
-      // 3. Determine the icon string. If "None", use an empty string.
       const iconText =
         selectedIcon.label === "None"
           ? ""
           : selectedIcon.label.split(" ")[0] + " ";
 
-      // --- OLD LOGIC (with one small change) ---
-
       const text = await vscode.window.showInputBox({
         prompt: "Button Text (the icon will be added automatically)",
-        placeHolder: "Start Server", // Simpler placeholder now
+        placeHolder: "Start Server",
       });
       if (!text) return;
 
-      // Combine the selected icon with the user's text
       const buttonText = iconText + text;
 
       const command = await vscode.window.showInputBox({
@@ -79,8 +65,15 @@ function activate(context) {
       const config = vscode.workspace.getConfiguration("click2run");
       const buttons = config.get("buttons", []);
 
-      // Use the combined buttonText here
-      buttons.push({ text: buttonText, command, tooltip });
+      // *** CHANGE: Add a unique ID using the current timestamp ***
+      const newButton = {
+        id: Date.now().toString(), // Unique ID!
+        text: buttonText,
+        command,
+        tooltip,
+      };
+
+      buttons.push(newButton);
 
       await config.update(
         "buttons",
@@ -88,14 +81,54 @@ function activate(context) {
         vscode.ConfigurationTarget.Workspace
       );
 
-      vscode.window.showInformationMessage(
-        `Button '${buttonText}' was added to this workspace!`
-      );
+      vscode.window.showInformationMessage(`Button '${buttonText}' was added!`);
     }
   );
 
+  // *** NEW: Command to Manage (and Delete) Buttons ***
   const manageButtonsCommand = vscode.commands.registerCommand(
     "click2run.manageButtons",
+    async () => {
+      const config = vscode.workspace.getConfiguration("click2run");
+      const buttons = config.get("buttons", []);
+
+      if (buttons.length === 0) {
+        vscode.window.showInformationMessage("You have no buttons to manage.");
+        return;
+      }
+
+      // Create a list of button labels for the Quick Pick
+      const buttonItems = buttons.map((b) => ({ label: b.text, id: b.id }));
+
+      // Show the list and let the user select a button
+      const selectedButton = await vscode.window.showQuickPick(buttonItems, {
+        placeHolder: "Select a button to manage",
+      });
+
+      if (!selectedButton) return;
+
+      // Ask the user what action to take
+      const action = await vscode.window.showQuickPick(["Delete", "Cancel"], {
+        placeHolder: `What would you like to do with '${selectedButton.label}'?`,
+      });
+
+      if (action === "Delete") {
+        // Filter the array, keeping all buttons EXCEPT the one with the selected ID
+        const newButtons = buttons.filter((b) => b.id !== selectedButton.id);
+        await config.update(
+          "buttons",
+          newButtons,
+          vscode.ConfigurationTarget.Workspace
+        );
+        vscode.window.showInformationMessage(
+          `Button '${selectedButton.label}' was deleted.`
+        );
+      }
+    }
+  );
+
+  const editButtonsFileCommand = vscode.commands.registerCommand(
+    "click2run.editButtonsFile",
     () => {
       vscode.commands.executeCommand(
         "workbench.action.openWorkspaceSettings",
@@ -104,7 +137,11 @@ function activate(context) {
     }
   );
 
-  context.subscriptions.push(addButtonCommand, manageButtonsCommand);
+  context.subscriptions.push(
+    addButtonCommand,
+    manageButtonsCommand,
+    editButtonsFileCommand
+  );
 
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((event) => {
@@ -118,9 +155,6 @@ function activate(context) {
   updateButtons();
 }
 
-/**
- * Clears existing buttons and creates new ones based on the current configuration.
- */
 function updateButtons() {
   for (const disposable of buttonDisposables.values()) {
     disposable.command.dispose();
@@ -132,8 +166,9 @@ function updateButtons() {
     .getConfiguration("click2run")
     .get("buttons", []);
 
-  buttonConfigs.forEach((buttonConfig, i) => {
-    const commandId = `click2run.runCommand.${i}`;
+  buttonConfigs.forEach((buttonConfig) => {
+    // *** CHANGE: Use the unique ID for the command ***
+    const commandId = `click2run.runCommand.${buttonConfig.id}`;
 
     const commandDisposable = vscode.commands.registerCommand(commandId, () => {
       if (!terminal || terminal.exitStatus) {
@@ -153,17 +188,14 @@ function updateButtons() {
     statusBarItem.command = commandId;
     statusBarItem.show();
 
-    buttonDisposables.set(i, {
+    // *** CHANGE: Use the unique ID as the key in our map ***
+    buttonDisposables.set(buttonConfig.id, {
       command: commandDisposable,
       statusBarItem: statusBarItem,
     });
   });
 }
 
-/**
- * Creates the static "+" button that is always visible.
- * @param {vscode.ExtensionContext} context
- */
 function createAddButton(context) {
   const addButton = vscode.window.createStatusBarItem(
     vscode.StatusBarAlignment.Left,
