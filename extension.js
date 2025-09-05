@@ -10,38 +10,78 @@ let terminal;
  */
 function activate(context) {
   // --- REGISTER THE COMMANDS ---
-  // These commands are defined in package.json and can be run from the Command Palette.
 
-  // Command to guide the user through adding a new button
   const addButtonCommand = vscode.commands.registerCommand(
     "click2run.addButton",
     async () => {
-      // Prompt for button details.
-      const text = await vscode.window.showInputBox({
-        prompt: "Button Text (e.g., $(play) Start Server)",
-        placeHolder: "$(play) Start Server",
+      // --- NEW: ICON PICKER LOGIC ---
+
+      // 1. Create a list of common icons for the user to choose from.
+      const icons = [
+        { label: "None", description: "Just plain text" },
+        { label: "$(play) play", description: "A play icon" },
+        { label: "$(debug-start) debug-start", description: "A debug icon" },
+        { label: "$(terminal) terminal", description: "A terminal icon" },
+        { label: "$(check) check", description: "A checkmark icon" },
+        { label: "$(x) x", description: "An X icon" },
+        { label: "$(sync) sync", description: "A sync/refresh icon" },
+        { label: "$(flame) flame", description: "A flame icon" },
+        { label: "$(rocket) rocket", description: "A rocket icon for deploys" },
+        { label: "$(bug) bug", description: "A bug icon for debugging" },
+        { label: "$(trash) trash", description: "A trash/delete icon" },
+        { label: "$(gear) gear", description: "A settings gear icon" },
+        {
+          label: "$(cloud-upload) cloud-upload",
+          description: "An upload icon",
+        },
+        {
+          label: "$(source-control) source-control",
+          description: "A git/source control icon",
+        },
+      ];
+
+      // 2. Show the Quick Pick dropdown to the user.
+      const selectedIcon = await vscode.window.showQuickPick(icons, {
+        placeHolder: "Select an icon for your button (optional)",
       });
-      if (!text) return; // Exit if user cancels
+
+      // Exit if the user presses escape
+      if (!selectedIcon) return;
+
+      // 3. Determine the icon string. If "None", use an empty string.
+      const iconText =
+        selectedIcon.label === "None"
+          ? ""
+          : selectedIcon.label.split(" ")[0] + " ";
+
+      // --- OLD LOGIC (with one small change) ---
+
+      const text = await vscode.window.showInputBox({
+        prompt: "Button Text (the icon will be added automatically)",
+        placeHolder: "Start Server", // Simpler placeholder now
+      });
+      if (!text) return;
+
+      // Combine the selected icon with the user's text
+      const buttonText = iconText + text;
 
       const command = await vscode.window.showInputBox({
         prompt: "Terminal Command to Run",
         placeHolder: "npm run dev",
       });
-      if (!command) return; // Exit if user cancels
+      if (!command) return;
 
       const tooltip = await vscode.window.showInputBox({
         prompt: "Tooltip Text (Optional)",
-        placeHolder: "Starts the development server",
+        placeHolder: `Runs the command: ${command}`,
       });
 
-      // Get the current configuration for this workspace.
       const config = vscode.workspace.getConfiguration("click2run");
       const buttons = config.get("buttons", []);
 
-      // Add the new button object to the array.
-      buttons.push({ text, command, tooltip });
+      // Use the combined buttonText here
+      buttons.push({ text: buttonText, command, tooltip });
 
-      // **IMPORTANT**: This updates the WORKSPACE settings, not the global ones.
       await config.update(
         "buttons",
         buttons,
@@ -49,12 +89,11 @@ function activate(context) {
       );
 
       vscode.window.showInformationMessage(
-        `Button '${text}' was added to this workspace!`
+        `Button '${buttonText}' was added to this workspace!`
       );
     }
   );
 
-  // Command to open the workspace settings.json file for manual editing
   const manageButtonsCommand = vscode.commands.registerCommand(
     "click2run.manageButtons",
     () => {
@@ -67,8 +106,6 @@ function activate(context) {
 
   context.subscriptions.push(addButtonCommand, manageButtonsCommand);
 
-  // --- WATCH FOR CONFIGURATION CHANGES ---
-  // If the user manually edits the settings, we need to update the buttons.
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (event.affectsConfiguration("click2run.buttons")) {
@@ -77,42 +114,35 @@ function activate(context) {
     })
   );
 
-  // --- INITIALIZE BUTTONS ON STARTUP ---
-  createAddButton(context); // The static "+" button
-  updateButtons(); // All the user-defined buttons
+  createAddButton(context);
+  updateButtons();
 }
 
 /**
  * Clears existing buttons and creates new ones based on the current configuration.
  */
 function updateButtons() {
-  // Clean up any buttons and commands that might already exist.
   for (const disposable of buttonDisposables.values()) {
     disposable.command.dispose();
     disposable.statusBarItem.dispose();
   }
   buttonDisposables.clear();
 
-  // Get the button configurations from the workspace settings.
   const buttonConfigs = vscode.workspace
     .getConfiguration("click2run")
     .get("buttons", []);
 
-  // Create a status bar item for each button object in the settings.
   buttonConfigs.forEach((buttonConfig, i) => {
     const commandId = `click2run.runCommand.${i}`;
 
-    // Register a unique command for this specific button
     const commandDisposable = vscode.commands.registerCommand(commandId, () => {
-      // If we don't have a terminal or the last one was closed, create a new one.
       if (!terminal || terminal.exitStatus) {
         terminal = vscode.window.createTerminal(`Click2Run`);
       }
-      terminal.show(); // Bring the terminal into view
-      terminal.sendText(buttonConfig.command); // Send the command to the terminal
+      terminal.show();
+      terminal.sendText(buttonConfig.command);
     });
 
-    // Create the visible button in the status bar
     const statusBarItem = vscode.window.createStatusBarItem(
       vscode.StatusBarAlignment.Left,
       buttonConfig.priority || 0
@@ -120,10 +150,9 @@ function updateButtons() {
     statusBarItem.text = buttonConfig.text;
     statusBarItem.tooltip = buttonConfig.tooltip;
     statusBarItem.color = buttonConfig.color;
-    statusBarItem.command = commandId; // When clicked, run the command we just registered
+    statusBarItem.command = commandId;
     statusBarItem.show();
 
-    // Store the new button and its command so we can dispose of them later.
     buttonDisposables.set(i, {
       command: commandDisposable,
       statusBarItem: statusBarItem,
@@ -139,17 +168,15 @@ function createAddButton(context) {
   const addButton = vscode.window.createStatusBarItem(
     vscode.StatusBarAlignment.Left,
     100
-  ); // High priority to appear on the left
+  );
   addButton.text = "$(add)";
   addButton.tooltip = "Click2Run: Add a new command button";
-  addButton.command = "click2run.addButton"; // This triggers the command we registered in activate()
+  addButton.command = "click2run.addButton";
   addButton.show();
   context.subscriptions.push(addButton);
 }
 
-// This function is called when the extension is deactivated.
 function deactivate() {
-  // Clean up all disposables and the terminal.
   for (const disposable of buttonDisposables.values()) {
     disposable.command.dispose();
     disposable.statusBarItem.dispose();
