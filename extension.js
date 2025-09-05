@@ -1,6 +1,6 @@
 const vscode = require("vscode");
-const fs = require("fs"); // Node.js File System module
-const path = require("path"); // Node.js Path module
+const fs = require("fs");
+const path = require("path");
 
 const buttonDisposables = new Map();
 let sharedTerminal;
@@ -113,6 +113,20 @@ function activate(context) {
         placeHolder: `Runs the command: ${command}`,
       });
       const finalTooltip = tooltip || `Runs the command: '${command}'`;
+
+      const priorityStr = await vscode.window.showInputBox({
+        prompt: "Button Order Priority (Higher numbers appear further left)",
+        placeHolder: "e.g., 100 for far left, 0 for default",
+        value: "0",
+        validateInput: (text) => {
+          return isNaN(parseInt(text, 10))
+            ? "Please enter a valid number."
+            : null;
+        },
+      });
+      if (priorityStr === undefined) return;
+      const priority = parseInt(priorityStr, 10);
+
       const config = vscode.workspace.getConfiguration("click2run");
       const buttons = config.get("buttons", []);
       const newButton = {
@@ -122,6 +136,7 @@ function activate(context) {
         tooltip: finalTooltip,
         color: selectedColor.color,
         useNewTerminal: useNewTerminal,
+        priority: priority,
       };
       buttons.push(newButton);
       await config.update(
@@ -193,6 +208,20 @@ function activate(context) {
           value: buttonToEdit.tooltip || "",
         });
         const finalTooltip = newTooltip || `Runs the command: '${newCommand}'`;
+
+        const priorityStr = await vscode.window.showInputBox({
+          prompt: "Button Order Priority (Higher numbers appear further left)",
+          placeHolder: "e.g., 100 for far left, 0 for default",
+          value: (buttonToEdit.priority || 0).toString(),
+          validateInput: (text) => {
+            return isNaN(parseInt(text, 10))
+              ? "Please enter a valid number."
+              : null;
+          },
+        });
+        if (priorityStr === undefined) return;
+        const newPriority = parseInt(priorityStr, 10);
+
         const buttonIndex = buttons.findIndex(
           (b) => b.id === selectedButton.id
         );
@@ -201,6 +230,8 @@ function activate(context) {
         buttons[buttonIndex].tooltip = finalTooltip;
         buttons[buttonIndex].color = newColor.color;
         buttons[buttonIndex].useNewTerminal = useNewTerminal;
+        buttons[buttonIndex].priority = newPriority;
+
         await config.update(
           "buttons",
           buttons,
@@ -353,6 +384,9 @@ function updateButtons() {
   const buttonConfigs = vscode.workspace
     .getConfiguration("click2run")
     .get("buttons", []);
+
+  buttonConfigs.sort((a, b) => (b.priority || 0) - (a.priority || 0));
+
   buttonConfigs.forEach((buttonConfig) => {
     const commandId = `click2run.runCommand.${buttonConfig.id}`;
     const commandDisposable = vscode.commands.registerCommand(commandId, () => {
