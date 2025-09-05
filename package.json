@@ -1,33 +1,67 @@
 {
   "name": "click2run",
   "displayName": "Click2Run",
-  "description": "Run any command or script with a single click.",
-  "version": "0.0.1",
+  "description": "Create custom buttons in the status bar to run any terminal commands.",
+  "version": "1.0.0",
+  "publisher": "YourPublisherName",
   "engines": {
-    "vscode": "^1.103.0"
+    "vscode": "^1.80.0"
   },
-  "categories": [
-    "Other"
-  ],
-  "activationEvents": [],
   "main": "./extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "contributes": {
-    "commands": [{
-      "command": "click2run.helloWorld",
-      "title": "Hello World"
-    }]
-  },
-  "scripts": {
-    "lint": "eslint .",
-    "pretest": "npm run lint",
-    "test": "vscode-test"
-  },
-  "devDependencies": {
-    "@types/vscode": "^1.103.0",
-    "@types/mocha": "^10.0.10",
-    "@types/node": "22.x",
-    "eslint": "^9.34.0",
-    "@vscode/test-cli": "^0.0.11",
-    "@vscode/test-electron": "^2.5.2"
+    "commands": [
+      {
+        "command": "click2run.addButton",
+        "title": "Click2Run: Add New Button"
+      },
+      {
+        "command": "click2run.manageButtons",
+        "title": "Click2Run: Edit Workspace Buttons (settings.json)"
+      }
+    ],
+    "configuration": {
+      "title": "Click2Run",
+      "properties": {
+        "click2run.buttons": {
+          "type": "array",
+          "scope": "resource",
+          "default": [],
+          "description": "Your list of custom buttons for this workspace.",
+          "items": {
+            "type": "object",
+            "required": [
+              "text",
+              "command"
+            ],
+            "properties": {
+              "text": {
+                "type": "string",
+                "description": "Text to display on the button. You can use icons like $(play)."
+              },
+              "tooltip": {
+                "type": "string",
+                "description": "Tooltip text shown when you hover over the button."
+              },
+              "color": {
+                "type": "string",
+                "description": "The color of the button's text, either a hex code or a theme color ID."
+              },
+              "command": {
+                "type": "string",
+                "description": "The terminal command to run. Use '&&' to chain multiple commands."
+              },
+              "priority": {
+                "type": "number",
+                "default": 0,
+                "description": "Controls the order of buttons. Higher numbers appear further to the left."
+              }
+            }
+          }
+        }
+      }
+    }
   }
 }
