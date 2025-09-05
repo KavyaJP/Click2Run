@@ -4,6 +4,8 @@ const path = require("path");
 
 const buttonDisposables = new Map();
 let sharedTerminal;
+let outputChannel; // Variable for our logging panel
+
 const colorOptions = [
   {
     label: "Default",
@@ -43,6 +45,10 @@ const colorOptions = [
 ];
 
 function activate(context) {
+  // Create the output channel for logging
+  outputChannel = vscode.window.createOutputChannel("Click2Run");
+  log("Click2Run extension is now active.");
+
   const WELCOME_MESSAGE_KEY = "click2run.hasShownWelcome";
   if (!context.globalState.get(WELCOME_MESSAGE_KEY)) {
     vscode.window.showInformationMessage(
@@ -50,6 +56,7 @@ function activate(context) {
       "Got it!"
     );
     context.globalState.update(WELCOME_MESSAGE_KEY, true);
+    log("First-time welcome message shown.");
   }
 
   const addButtonCommand = vscode.commands.registerCommand(
@@ -113,7 +120,6 @@ function activate(context) {
         placeHolder: `Runs the command: ${command}`,
       });
       const finalTooltip = tooltip || `Runs the command: '${command}'`;
-
       const priorityStr = await vscode.window.showInputBox({
         prompt: "Button Order Priority (Higher numbers appear further left)",
         placeHolder: "e.g., 100 for far left, 0 for default",
@@ -126,7 +132,6 @@ function activate(context) {
       });
       if (priorityStr === undefined) return;
       const priority = parseInt(priorityStr, 10);
-
       const config = vscode.workspace.getConfiguration("click2run");
       const buttons = config.get("buttons", []);
       const newButton = {
@@ -144,6 +149,7 @@ function activate(context) {
         buttons,
         vscode.ConfigurationTarget.Workspace
       );
+      log(`Button added: '${buttonText}' with command '${command}'`);
       vscode.window.showInformationMessage(`Button '${buttonText}' was added!`);
     }
   );
@@ -175,6 +181,7 @@ function activate(context) {
           newButtons,
           vscode.ConfigurationTarget.Workspace
         );
+        log(`Button deleted: '${selectedButton.label}'`);
         vscode.window.showInformationMessage(
           `Button '${selectedButton.label}' was deleted.`
         );
@@ -208,7 +215,6 @@ function activate(context) {
           value: buttonToEdit.tooltip || "",
         });
         const finalTooltip = newTooltip || `Runs the command: '${newCommand}'`;
-
         const priorityStr = await vscode.window.showInputBox({
           prompt: "Button Order Priority (Higher numbers appear further left)",
           placeHolder: "e.g., 100 for far left, 0 for default",
@@ -221,7 +227,6 @@ function activate(context) {
         });
         if (priorityStr === undefined) return;
         const newPriority = parseInt(priorityStr, 10);
-
         const buttonIndex = buttons.findIndex(
           (b) => b.id === selectedButton.id
         );
@@ -231,12 +236,12 @@ function activate(context) {
         buttons[buttonIndex].color = newColor.color;
         buttons[buttonIndex].useNewTerminal = useNewTerminal;
         buttons[buttonIndex].priority = newPriority;
-
         await config.update(
           "buttons",
           buttons,
           vscode.ConfigurationTarget.Workspace
         );
+        log(`Button edited: '${newText}'`);
         vscode.window.showInformationMessage(
           `Button '${newText}' was updated.`
         );
@@ -247,6 +252,7 @@ function activate(context) {
   const editButtonsFileCommand = vscode.commands.registerCommand(
     "click2run.editButtonsFile",
     () => {
+      log("Opening settings.json for manual editing.");
       vscode.commands.executeCommand(
         "workbench.action.openWorkspaceSettings",
         "click2run.buttons"
@@ -270,21 +276,22 @@ function activate(context) {
             "click2run-buttons.json"
           )
         : undefined;
-
       const uri = await vscode.window.showSaveDialog({
         defaultUri: defaultUri,
         saveLabel: "Export Buttons",
         filters: { JSON: ["json"] },
       });
-
       if (uri) {
+        log(`Exporting ${buttons.length} buttons to ${uri.fsPath}`);
         const buttonsJson = JSON.stringify(buttons, null, 4);
         fs.writeFile(uri.fsPath, buttonsJson, (err) => {
           if (err) {
+            log(`ERROR exporting buttons: ${err.message}`);
             vscode.window.showErrorMessage(
               `Failed to export buttons: ${err.message}`
             );
           } else {
+            log("Export successful.");
             vscode.window.showInformationMessage(
               `Buttons successfully exported to ${path.basename(uri.fsPath)}`
             );
@@ -302,10 +309,11 @@ function activate(context) {
         openLabel: "Import Buttons",
         filters: { JSON: ["json"] },
       });
-
       if (uris && uris[0]) {
+        log(`Attempting to import buttons from ${uris[0].fsPath}`);
         fs.readFile(uris[0].fsPath, "utf8", async (err, data) => {
           if (err) {
+            log(`ERROR reading import file: ${err.message}`);
             vscode.window.showErrorMessage(
               `Failed to read import file: ${err.message}`
             );
@@ -316,27 +324,28 @@ function activate(context) {
             if (!Array.isArray(importedButtons)) {
               throw new Error("File does not contain a valid button array.");
             }
-
             const importType = await vscode.window.showQuickPick(
               ["Merge with existing buttons", "Overwrite existing buttons"],
               {
                 placeHolder: "How would you like to import these buttons?",
               }
             );
-
             if (!importType) return;
-
             const config = vscode.workspace.getConfiguration("click2run");
             let newButtons = [];
-
             if (importType.startsWith("Merge")) {
               const currentButtons = config.get("buttons", []);
               newButtons = [...currentButtons, ...importedButtons];
+              log(
+                `Merging ${importedButtons.length} buttons with ${currentButtons.length} existing buttons.`
+              );
             } else {
               // Overwrite
               newButtons = importedButtons;
+              log(
+                `Overwriting existing buttons with ${importedButtons.length} imported buttons.`
+              );
             }
-
             await config.update(
               "buttons",
               newButtons,
@@ -346,6 +355,7 @@ function activate(context) {
               "Buttons imported successfully!"
             );
           } catch (e) {
+            log(`ERROR parsing import file: ${e.message}`);
             vscode.window.showErrorMessage(
               `Failed to import buttons: ${e.message}`
             );
@@ -355,17 +365,42 @@ function activate(context) {
     }
   );
 
+  const runButton1 = vscode.commands.registerCommand(
+    "click2run.runButton1",
+    () => runButtonByIndex(0)
+  );
+  const runButton2 = vscode.commands.registerCommand(
+    "click2run.runButton2",
+    () => runButtonByIndex(1)
+  );
+  const runButton3 = vscode.commands.registerCommand(
+    "click2run.runButton3",
+    () => runButtonByIndex(2)
+  );
+
+  const showLogsCommand = vscode.commands.registerCommand(
+    "click2run.showLogs",
+    () => {
+      outputChannel.show();
+    }
+  );
+
   context.subscriptions.push(
     addButtonCommand,
     manageButtonsCommand,
     editButtonsFileCommand,
     exportButtonsCommand,
-    importButtonsCommand
+    importButtonsCommand,
+    runButton1,
+    runButton2,
+    runButton3,
+    showLogsCommand
   );
 
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (event.affectsConfiguration("click2run.buttons")) {
+        log("Configuration changed, updating buttons.");
         updateButtons();
       }
     })
@@ -373,6 +408,43 @@ function activate(context) {
 
   createAddButton(context);
   updateButtons();
+}
+
+function runButtonByIndex(index) {
+  const buttonConfigs = vscode.workspace
+    .getConfiguration("click2run")
+    .get("buttons", []);
+  buttonConfigs.sort((a, b) => (b.priority || 0) - (a.priority || 0));
+  if (buttonConfigs.length > index) {
+    const button = buttonConfigs[index];
+    runCommandInTerminal(button.command, button.useNewTerminal, button.text);
+  } else {
+    log(
+      `WARNING: Shortcut triggered for button index ${index}, but no button exists.`
+    );
+    vscode.window.showWarningMessage(
+      `Click2Run: No button configured at position ${index + 1}.`
+    );
+  }
+}
+
+function runCommandInTerminal(command, useNewTerminal, buttonText) {
+  log(`Executing command: '${command}' for button '${buttonText}'`);
+  let targetTerminal;
+  if (useNewTerminal) {
+    log("Creating new terminal for command.");
+    targetTerminal = vscode.window.createTerminal(`Click2Run: ${buttonText}`);
+  } else {
+    if (!sharedTerminal || sharedTerminal.exitStatus) {
+      log("Creating new shared terminal.");
+      sharedTerminal = vscode.window.createTerminal(`Click2Run (Shared)`);
+    } else {
+      log("Reusing existing shared terminal.");
+    }
+    targetTerminal = sharedTerminal;
+  }
+  targetTerminal.show();
+  targetTerminal.sendText(command);
 }
 
 function updateButtons() {
@@ -384,25 +456,16 @@ function updateButtons() {
   const buttonConfigs = vscode.workspace
     .getConfiguration("click2run")
     .get("buttons", []);
-
   buttonConfigs.sort((a, b) => (b.priority || 0) - (a.priority || 0));
-
+  log(`Updating status bar. Found ${buttonConfigs.length} buttons.`);
   buttonConfigs.forEach((buttonConfig) => {
     const commandId = `click2run.runCommand.${buttonConfig.id}`;
     const commandDisposable = vscode.commands.registerCommand(commandId, () => {
-      let targetTerminal;
-      if (buttonConfig.useNewTerminal) {
-        targetTerminal = vscode.window.createTerminal(
-          `Click2Run: ${buttonConfig.text}`
-        );
-      } else {
-        if (!sharedTerminal || sharedTerminal.exitStatus) {
-          sharedTerminal = vscode.window.createTerminal(`Click2Run (Shared)`);
-        }
-        targetTerminal = sharedTerminal;
-      }
-      targetTerminal.show();
-      targetTerminal.sendText(buttonConfig.command);
+      runCommandInTerminal(
+        buttonConfig.command,
+        buttonConfig.useNewTerminal,
+        buttonConfig.text
+      );
     });
     const statusBarItem = vscode.window.createStatusBarItem(
       vscode.StatusBarAlignment.Left,
@@ -432,7 +495,18 @@ function createAddButton(context) {
   context.subscriptions.push(addButton);
 }
 
+function log(message) {
+  if (outputChannel) {
+    const time = new Date().toLocaleTimeString();
+    outputChannel.appendLine(`[${time}] ${message}`);
+  }
+}
+
 function deactivate() {
+  log("Deactivating Click2Run extension.");
+  if (outputChannel) {
+    outputChannel.dispose();
+  }
   if (sharedTerminal) {
     sharedTerminal.dispose();
   }

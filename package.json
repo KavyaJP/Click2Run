@@ -2,7 +2,7 @@
   "name": "click2run",
   "displayName": "Click2Run",
   "description": "Create custom buttons in the status bar to run any terminal commands.",
-  "version": "1.3.0",
+  "version": "1.5.0",
   "publisher": "YourPublisherName",
   "engines": {
     "vscode": "^1.80.0"
@@ -32,6 +32,39 @@
       {
         "command": "click2run.importButtons",
         "title": "Click2Run: Import Buttons from a File"
+      },
+      {
+        "command": "click2run.runButton1",
+        "title": "Click2Run: Run First Button"
+      },
+      {
+        "command": "click2run.runButton2",
+        "title": "Click2Run: Run Second Button"
+      },
+      {
+        "command": "click2run.runButton3",
+        "title": "Click2Run: Run Third Button"
+      },
+      {
+        "command": "click2run.showLogs",
+        "title": "Click2Run: Show Extension Logs"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "click2run.runButton1",
+        "key": "ctrl+alt+1",
+        "mac": "cmd+alt+1"
+      },
+      {
+        "command": "click2run.runButton2",
+        "key": "ctrl+alt+2",
+        "mac": "cmd+alt+2"
+      },
+      {
+        "command": "click2run.runButton3",
+        "key": "ctrl+alt+3",
+        "mac": "cmd+alt+3"
       }
     ],
     "configuration": {
@@ -50,36 +83,13 @@
               "id"
             ],
             "properties": {
-              "id": {
-                "type": "string",
-                "description": "A unique ID for the button."
-              },
-              "text": {
-                "type": "string",
-                "description": "Text to display on the button. You can use icons like $(play)."
-              },
-              "tooltip": {
-                "type": "string",
-                "description": "Tooltip text shown when you hover over the button."
-              },
-              "color": {
-                "type": "string",
-                "description": "The color of the button's text, either a hex code or a theme color ID."
-              },
-              "command": {
-                "type": "string",
-                "description": "The terminal command to run. Use '&&' to chain multiple commands."
-              },
-              "useNewTerminal": {
-                "type": "boolean",
-                "default": false,
-                "description": "If true, this command will always run in a new, dedicated terminal."
-              },
-              "priority": {
-                "type": "number",
-                "default": 0,
-                "description": "Controls the order of buttons. Higher numbers appear further to the left."
-              }
+              "id": { "type": "string" },
+              "text": { "type": "string" },
+              "tooltip": { "type": "string" },
+              "color": { "type": "string" },
+              "command": { "type": "string" },
+              "useNewTerminal": { "type": "boolean", "default": false },
+              "priority": { "type": "number", "default": 0 }
             }
           }
         }
