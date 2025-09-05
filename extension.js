@@ -2,8 +2,6 @@ const vscode = require("vscode");
 
 const buttonDisposables = new Map();
 let terminal;
-
-// --- A list of predefined colors for the user to choose from ---
 const colorOptions = [
   {
     label: "Default",
@@ -30,7 +28,6 @@ const colorOptions = [
     description: "Good for info/install tasks",
     color: "#30B4FF",
   },
-  // This special ID tells VS Code to use its built-in error color
   {
     label: "Error Color",
     description: "Uses the standard theme error color",
@@ -39,14 +36,18 @@ const colorOptions = [
 ];
 
 function activate(context) {
-  // --- REGISTER COMMANDS ---
+  const WELCOME_MESSAGE_KEY = "click2run.hasShownWelcome";
+  if (!context.globalState.get(WELCOME_MESSAGE_KEY)) {
+    vscode.window.showInformationMessage(
+      "Click2Run is ready! Click the (+) icon in the status bar to add your first command button.",
+      "Got it!"
+    );
+    context.globalState.update(WELCOME_MESSAGE_KEY, true);
+  }
 
   const addButtonCommand = vscode.commands.registerCommand(
     "click2run.addButton",
     async () => {
-      // This command's flow is now: Icon -> Color -> Text -> Command -> Tooltip
-
-      // Icon Picker (no change)
       const icons = [
         { label: "None", description: "Just plain text" },
         { label: "$(play) play", description: "A play icon" },
@@ -78,39 +79,40 @@ function activate(context) {
           ? ""
           : selectedIcon.label.split(" ")[0] + " ";
 
-      // *** NEW: Color Picker ***
       const selectedColor = await vscode.window.showQuickPick(colorOptions, {
         placeHolder: "Select a color for the button (optional)",
       });
-      if (!selectedColor) return; // Exit if user cancels
+      if (!selectedColor) return;
 
-      // Continue with the rest of the prompts (no change)
       const text = await vscode.window.showInputBox({
         prompt: "Button Text (icon and color will be added automatically)",
         placeHolder: "Start Server",
       });
       if (!text) return;
       const buttonText = iconText + text;
+
       const command = await vscode.window.showInputBox({
         prompt: "Terminal Command to Run",
         placeHolder: "npm run dev",
       });
       if (!command) return;
+
       const tooltip = await vscode.window.showInputBox({
-        prompt: "Tooltip Text (Optional)",
+        prompt: "Tooltip Text (Optional - Leave blank for auto-generation)",
         placeHolder: `Runs the command: ${command}`,
       });
+
+      const finalTooltip = tooltip || `Runs the command: '${command}'`;
 
       const config = vscode.workspace.getConfiguration("click2run");
       const buttons = config.get("buttons", []);
 
-      // *** CHANGE: Add the selected color to the new button object ***
       const newButton = {
         id: Date.now().toString(),
         text: buttonText,
         command,
-        tooltip,
-        color: selectedColor.color, // Add the color property
+        tooltip: finalTooltip,
+        color: selectedColor.color,
       };
       buttons.push(newButton);
       await config.update(
@@ -138,7 +140,6 @@ function activate(context) {
       const selectedButton = await vscode.window.showQuickPick(buttonItems, {
         placeHolder: "Select a button to manage",
       });
-
       if (!selectedButton) return;
 
       const action = await vscode.window.showQuickPick(
@@ -162,11 +163,10 @@ function activate(context) {
         const buttonToEdit = buttons.find((b) => b.id === selectedButton.id);
         if (!buttonToEdit) return;
 
-        // *** NEW: Add color prompt to the Edit flow ***
         const newColor = await vscode.window.showQuickPick(colorOptions, {
           placeHolder: "Select a new color for the button",
         });
-        if (!newColor) return; // Exit if user cancels
+        if (!newColor) return;
 
         const newText = await vscode.window.showInputBox({
           prompt: "Button Text",
@@ -181,19 +181,20 @@ function activate(context) {
         if (!newCommand) return;
 
         const newTooltip = await vscode.window.showInputBox({
-          prompt: "Tooltip Text (Optional)",
+          prompt: "Tooltip Text (Optional - Leave blank for auto-generation)",
           value: buttonToEdit.tooltip || "",
         });
+
+        const finalTooltip = newTooltip || `Runs the command: '${newCommand}'`;
 
         const buttonIndex = buttons.findIndex(
           (b) => b.id === selectedButton.id
         );
 
-        // *** CHANGE: Update the color property along with the others ***
         buttons[buttonIndex].text = newText;
         buttons[buttonIndex].command = newCommand;
-        buttons[buttonIndex].tooltip = newTooltip;
-        buttons[buttonIndex].color = newColor.color; // Update the color
+        buttons[buttonIndex].tooltip = finalTooltip;
+        buttons[buttonIndex].color = newColor.color;
 
         await config.update(
           "buttons",
@@ -236,7 +237,6 @@ function activate(context) {
 }
 
 function updateButtons() {
-  // This function automatically applies the color, so no changes are needed here.
   for (const disposable of buttonDisposables.values()) {
     disposable.command.dispose();
     disposable.statusBarItem.dispose();
@@ -260,7 +260,7 @@ function updateButtons() {
     );
     statusBarItem.text = buttonConfig.text;
     statusBarItem.tooltip = buttonConfig.tooltip;
-    statusBarItem.color = buttonConfig.color; // This line does all the work!
+    statusBarItem.color = buttonConfig.color;
     statusBarItem.command = commandId;
     statusBarItem.show();
     buttonDisposables.set(buttonConfig.id, {
