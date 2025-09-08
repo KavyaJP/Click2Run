@@ -3,7 +3,7 @@
   "displayName": "Click2Run",
   "description": "Create custom buttons in the status bar to run any terminal commands.",
   "version": "1.5.0",
-  "publisher": "Cow2Studios",
+  "publisher": "cow2studios",
   "engines": {
     "vscode": "^1.80.0"
   },
