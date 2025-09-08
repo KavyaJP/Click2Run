@@ -3,9 +3,14 @@
   "displayName": "Click2Run",
   "description": "Create custom buttons in the status bar to run any terminal commands.",
   "version": "1.5.0",
-  "publisher": "YourPublisherName",
+  "publisher": "Cow2Studios",
   "engines": {
     "vscode": "^1.80.0"
+  },
+  "icon":"assets/Logo.png",
+  "galleryBanner.color": {
+    "color": "#1a1a1a",
+    "theme": "dark"
   },
   "repository":"https://github.com/KavyaJP/Click2Run.git",
   "main": "./extension.js",
